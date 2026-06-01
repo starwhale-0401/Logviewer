@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+  />
+
+  <title>Novel Viewer</title>
+
+  <style>
+    *{
+      margin:0;
+      padding:0;
+      box-sizing:border-box;
+      -webkit-tap-highlight-color:transparent;
+    }
+
+    html,body{
+      width:100%;
+      height:100%;
+      overflow:hidden;
+      background:#000;
+      color:white;
+      font-family:sans-serif;
+    }
+
+    button{
+      font-family:sans-serif;
+    }
+
+    /* =========================
+       HOME
+    ========================= */
+
+    #home{
+      width:100%;
+      height:100%;
+      overflow-y:auto;
+      padding:20px;
+      background:#000;
+    }
+
+    #home h1{
+      font-size:28px;
+      margin-bottom:20px;
+    }
+
+    .chapterCard{
+      background:#111;
+      border:1px solid #222;
+      border-radius:20px;
+      padding:18px;
+      margin-bottom:14px;
+      cursor:pointer;
+    }
+
+    .chapterTitle{
+      font-size:18px;
+      margin-bottom:8px;
+    }
+
+    .chapterSub{
+      font-size:13px;
+      color:#999;
+    }
+
+    /* =========================
+       VIEWER
+    ========================= */
+
+    #viewer{
+      display:none;
+      position:relative;
+      width:100vw;
+      height:100vh;
+      overflow:hidden;
+      background:black;
+      touch-action:pan-y;
+    }
+
+    img{
+      width:100%;
+      height:100%;
+      object-fit:contain;
+      user-select:none;
+      -webkit-user-drag:none;
+    }
+
+    .zone{
+      position:absolute;
+      top:0;
+      width:50%;
+      height:100%;
+      z-index:5;
+    }
+
+    #prev{
+      left:0;
+    }
+
+    #next{
+      right:0;
+    }
+
+    #topBar{
+      position:absolute;
+      top:16px;
+      left:16px;
+      right:16px;
+
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+
+      z-index:20;
+    }
+
+    .topBtn{
+      border:none;
+      border-radius:999px;
+      padding:10px 14px;
+
+      background:rgba(255,255,255,0.15);
+      color:white;
+
+      backdrop-filter:blur(10px);
+
+      cursor:pointer;
+    }
+
+    #page{
+      position:absolute;
+      bottom:20px;
+      left:50%;
+      transform:translateX(-50%);
+
+      color:white;
+      background:rgba(0,0,0,0.5);
+
+      padding:8px 14px;
+      border-radius:999px;
+
+      font-size:14px;
+
+      z-index:20;
+    }
+
+    /* =========================
+       POPUP
+    ========================= */
+
+    #resumePopup{
+      position:absolute;
+      inset:0;
+
+      background:rgba(0,0,0,0.85);
+
+      display:none;
+      align-items:center;
+      justify-content:center;
+
+      z-index:50;
+    }
+
+    #resumeCard{
+      background:#111;
+      border:1px solid #333;
+
+      border-radius:20px;
+
+      padding:24px;
+
+      width:90%;
+      max-width:320px;
+
+      text-align:center;
+    }
+
+    #resumeCard h2{
+      margin-bottom:10px;
+    }
+
+    #resumeCard p{
+      margin-bottom:20px;
+      color:#aaa;
+    }
+
+    .btns{
+      display:flex;
+      gap:10px;
+    }
+
+    .btns button{
+      flex:1;
+
+      padding:12px;
+
+      border:none;
+      border-radius:12px;
+
+      cursor:pointer;
+    }
+
+    .primary{
+      background:white;
+      color:black;
+    }
+
+    .secondary{
+      background:#222;
+      color:white;
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- =========================
+     HOME
+========================= -->
+
+<div id="home">
+
+  <h1>목록</h1>
+
+  <div id="chapterList"></div>
+
+</div>
+
+<!-- =========================
+     VIEWER
+========================= -->
+
+<div id="viewer">
+
+  <img id="image" src="" />
+
+  <div id="prev" class="zone"></div>
+  <div id="next" class="zone"></div>
+
+  <div id="topBar">
+
+    <button class="topBtn" id="homeBtn">
+      목록
+    </button>
+
+    <button class="topBtn" id="resetBtn">
+      북마크 초기화
+    </button>
+
+  </div>
+
+  <div id="page"></div>
+
+  <!-- 이어보기 -->
+
+  <div id="resumePopup">
+
+    <div id="resumeCard">
+
+      <h2>이어보기</h2>
+
+      <p id="resumeText"></p>
+
+      <div class="btns">
+
+        <button
+          class="secondary"
+          id="startOver"
+        >
+          처음부터
+        </button>
+
+        <button
+          class="primary"
+          id="continueBtn"
+        >
+          이어보기
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+
+  // =========================
+  // 챕터 설정
+  // =========================
+
+  const chapters = {
+
+    "001화": 18,
+    "002화": 1,
+
+  };
+
+  // =========================
+
+  const home =
+    document.getElementById("home");
+
+  const viewer =
+    document.getElementById("viewer");
+
+  const chapterList =
+    document.getElementById("chapterList");
+
+  const image =
+    document.getElementById("image");
+
+  const pageText =
+    document.getElementById("page");
+
+  const popup =
+    document.getElementById("resumePopup");
+
+  // =========================
+
+  let currentChapter = "";
+  let currentPage = 0;
+  let pages = [];
+
+  // =========================
+  // 챕터 목록 생성
+  // =========================
+
+  for (const chapter in chapters) {
+
+    const card =
+      document.createElement("div");
+
+    card.className = "chapterCard";
+
+    const saved =
+      localStorage.getItem(
+        `bookmark_${chapter}`
+      );
+
+    let subText =
+      `${chapters[chapter]} 페이지`;
+
+    if (saved !== null) {
+
+      subText =
+        `${Number(saved)+1} 페이지까지 읽음`;
+    }
+
+    card.innerHTML = `
+      <div class="chapterTitle">
+        ${chapter}
+      </div>
+
+      <div class="chapterSub">
+        ${subText}
+      </div>
+    `;
+
+    card.onclick = () => {
+      openChapter(chapter);
+    };
+
+    chapterList.appendChild(card);
+  }
+
+  // =========================
+  // 챕터 열기
+  // =========================
+
+  function openChapter(chapter){
+
+    currentChapter = chapter;
+
+    pages = [];
+
+    const imageCount =
+      chapters[chapter];
+
+    for(let i=1; i<=imageCount; i++){
+
+      const fileName =
+        String(i).padStart(3,"0");
+
+      pages.push(
+        `images/${chapter}/${fileName}.png`
+      );
+    }
+
+    const STORAGE_KEY =
+      `bookmark_${chapter}`;
+
+    const savedPage =
+      localStorage.getItem(STORAGE_KEY);
+
+    home.style.display = "none";
+    viewer.style.display = "block";
+
+    // 이어보기 팝업
+
+    if(
+      savedPage !== null &&
+      Number(savedPage) > 0
+    ){
+
+      popup.style.display = "flex";
+
+      document.getElementById(
+        "resumeText"
+      ).textContent =
+      `${Number(savedPage)+1} 페이지부터 이어서 볼까?`;
+
+      document.getElementById(
+        "continueBtn"
+      ).onclick = () => {
+
+        currentPage =
+          Number(savedPage);
+
+        renderPage();
+
+        popup.style.display = "none";
+      };
+
+      document.getElementById(
+        "startOver"
+      ).onclick = () => {
+
+        currentPage = 0;
+
+        renderPage();
+
+        popup.style.display = "none";
+      };
+
+    } else {
+
+      currentPage = 0;
+
+      renderPage();
+    }
+  }
+
+  // =========================
+  // 페이지 렌더
+  // =========================
+
+  function renderPage(){
+
+    image.src =
+      pages[currentPage];
+
+    pageText.textContent =
+      `${currentPage+1} / ${pages.length}`;
+
+    localStorage.setItem(
+      `bookmark_${currentChapter}`,
+      currentPage
+    );
+  }
+
+  // =========================
+  // 페이지 이동
+  // =========================
+
+  function nextPage(){
+
+    if(currentPage < pages.length - 1){
+
+      currentPage++;
+
+      renderPage();
+    }
+  }
+
+  function prevPage(){
+
+    if(currentPage > 0){
+
+      currentPage--;
+
+      renderPage();
+    }
+  }
+
+  // =========================
+  // 클릭 이동
+  // =========================
+
+  document
+    .getElementById("next")
+    .addEventListener("click",nextPage);
+
+  document
+    .getElementById("prev")
+    .addEventListener("click",prevPage);
+
+  // =========================
+  // 키보드 이동
+  // =========================
+
+  window.addEventListener("keydown",(e)=>{
+
+    if(e.key==="ArrowRight"){
+      nextPage();
+    }
+
+    if(e.key==="ArrowLeft"){
+      prevPage();
+    }
+  });
+
+  // =========================
+  // 스와이프
+  // =========================
+
+  let touchStartX = 0;
+  let touchEndX = 0;
+
+  window.addEventListener(
+    "touchstart",
+    (e)=>{
+
+      touchStartX =
+        e.changedTouches[0].screenX;
+    }
+  );
+
+  window.addEventListener(
+    "touchend",
+    (e)=>{
+
+      touchEndX =
+        e.changedTouches[0].screenX;
+
+      const diff =
+        touchEndX - touchStartX;
+
+      if(Math.abs(diff) > 50){
+
+        if(diff < 0){
+
+          nextPage();
+
+        } else {
+
+          prevPage();
+        }
+      }
+    }
+  );
+
+  // =========================
+  // 목록 버튼
+  // =========================
+
+  document
+    .getElementById("homeBtn")
+    .onclick = ()=>{
+
+      viewer.style.display = "none";
+
+      home.style.display = "block";
+
+      location.reload();
+    };
+
+  // =========================
+  // 북마크 초기화
+  // =========================
+
+  document
+    .getElementById("resetBtn")
+    .onclick = ()=>{
+
+      localStorage.removeItem(
+        `bookmark_${currentChapter}`
+      );
+
+      alert("북마크 초기화 완료");
+    };
+
+</script>
+
+</body>
+</html>
